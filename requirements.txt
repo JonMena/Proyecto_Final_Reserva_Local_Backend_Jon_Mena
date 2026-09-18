@@ -1,3 +1,6 @@
 Flask
 Flask-Cors
 PyMySQL
+Flask-SQLAlchemy
+certifi
+python-dotenv
