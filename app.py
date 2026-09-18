@@ -6,26 +6,33 @@ from flask import Flask, jsonify
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
 
-load_dotenv()  # lee el archivo .env
-
-DB_URI = (
-    f"mysql+pymysql://{quote_plus(os.getenv('DB_USER'))}:"
-    f"{quote_plus(os.getenv('DB_PASSWORD'))}@"
-    f"{os.getenv('DB_HOST')}:{os.getenv('DB_PORT')}/{os.getenv('DB_NAME')}"
-)
+load_dotenv()
 
 app = Flask(__name__)
 CORS(app)
 
-app.config["SQLALCHEMY_DATABASE_URI"] = DB_URI
-app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
-    "connect_args": {
-        "ssl_ca": certifi.where(),
-        "ssl_verify_cert": True,
-        "ssl_verify_identity": True,
+DATABASE_URL = os.getenv("DATABASE_URL")
+
+if DATABASE_URL:
+    # Produccion (PythonAnywhere): SQLite local del servidor
+    app.config["SQLALCHEMY_DATABASE_URI"] = DATABASE_URL
+else:
+    # Desarrollo (tu PC): TiDB Cloud (MySQL)
+    DB_URI = (
+        f"mysql+pymysql://{quote_plus(os.getenv('DB_USER'))}:"
+        f"{quote_plus(os.getenv('DB_PASSWORD'))}@"
+        f"{os.getenv('DB_HOST')}:{os.getenv('DB_PORT')}/{os.getenv('DB_NAME')}"
+    )
+    app.config["SQLALCHEMY_DATABASE_URI"] = DB_URI
+    app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
+        "connect_args": {
+            "ssl_ca": certifi.where(),
+            "ssl_verify_cert": True,
+            "ssl_verify_identity": True,
+        }
     }
-}
+
+app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 db = SQLAlchemy(app)
 
 
@@ -41,7 +48,7 @@ def status():
     return jsonify({
         "status": "ok",
         "proyecto": "ReservaLocal API",
-        "mensaje": "Backend operativo con MySQL (TiDB Cloud)"
+        "mensaje": "Backend operativo con base de datos"
     })
 
 
