@@ -1,10 +1,12 @@
 import os
 import certifi
+import secrets                                    # --- SESIÓN 1 (NUEVO) ---
 from urllib.parse import quote_plus
 from dotenv import load_dotenv
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
+from werkzeug.security import generate_password_hash, check_password_hash  # --- SESIÓN 1 (NUEVO) ---
 
 load_dotenv()
 
@@ -34,6 +36,8 @@ app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 db = SQLAlchemy(app)
 
 
+# ---------- MODELOS ----------
+
 class Servicio(db.Model):
     __tablename__ = "servicios"
     id = db.Column(db.Integer, primary_key=True)
@@ -62,6 +66,34 @@ class Reserva(db.Model):
         }
 
 
+# --- SESIÓN 1 (NUEVO): modelo de usuario para login ---
+class Usuario(db.Model):
+    __tablename__ = "usuarios"
+
+    id = db.Column(db.Integer, primary_key=True)
+    email = db.Column(db.String(120), unique=True, nullable=False)
+    password_hash = db.Column(db.String(256), nullable=False)
+    rol = db.Column(db.String(20), nullable=False)  # "admin" o "cliente"
+    token = db.Column(db.String(64), nullable=True)
+
+    def set_password(self, password):
+        self.password_hash = generate_password_hash(password)
+
+    def check_password(self, password):
+        return check_password_hash(self.password_hash, password)
+
+    def generar_token(self):
+        self.token = secrets.token_hex(32)
+        return self.token
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "email": self.email,
+            "rol": self.rol,
+        }
+
+
 # ---------- Rutas de estado y setup ----------
 
 @app.route("/")
@@ -73,15 +105,30 @@ def status():
     })
 
 
+# --- SESIÓN 1 (NUEVO): /setup ampliado, ahora crea también los usuarios del PDF ---
 @app.route("/setup")
 def setup():
     db.create_all()
+
+    # Servicios de ejemplo (solo si no existen)
     if Servicio.query.count() == 0:
         db.session.add_all([
             Servicio(nombre="Corte de pelo", precio=15),
             Servicio(nombre="Arreglo de barba", precio=10),
         ])
-        db.session.commit()
+
+    # Usuarios de prueba del PDF (solo si no existen)
+    if Usuario.query.count() == 0:
+        admin = Usuario(email="admin@reservalocal.com", rol="admin")
+        admin.set_password("Admin123.")
+
+        cliente = Usuario(email="cliente@reservalocal.com", rol="cliente")
+        cliente.set_password("Cliente123!")
+
+        db.session.add(admin)
+        db.session.add(cliente)
+
+    db.session.commit()
     return jsonify({"status": "tablas creadas y datos de prueba insertados"})
 
 
@@ -139,6 +186,42 @@ def borrar_reserva(id):
     db.session.delete(reserva)
     db.session.commit()
     return jsonify({"status": "reserva eliminada", "id": id})
+
+
+# --- SESIÓN 1 (NUEVO): endpoint de login ---
+@app.route("/login", methods=["POST"])
+def login():
+    datos = request.get_json(silent=True) or {}
+    email = datos.get("email", "").strip().lower()
+    password = datos.get("password", "")
+
+    usuario = Usuario.query.filter_by(email=email).first()
+
+    if not usuario or not usuario.check_password(password):
+        return jsonify({"error": "Email o contraseña incorrectos"}), 401
+
+    token = usuario.generar_token()
+    db.session.commit()
+
+    return jsonify({
+        "mensaje": "Login correcto",
+        "token": token,
+        "usuario": usuario.to_dict(),
+    }), 200
+
+
+# --- SESIÓN 1 (NUEVO): endpoint de logout ---
+@app.route("/logout", methods=["POST"])
+def logout():
+    datos = request.get_json(silent=True) or {}
+    token = datos.get("token", "")
+
+    usuario = Usuario.query.filter_by(token=token).first()
+    if usuario:
+        usuario.token = None
+        db.session.commit()
+
+    return jsonify({"mensaje": "Sesión cerrada"}), 200
 
 
 if __name__ == "__main__":
