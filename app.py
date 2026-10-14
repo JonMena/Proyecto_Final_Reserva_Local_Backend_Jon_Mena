@@ -46,8 +46,6 @@ EXTENSIONES_PERMITIDAS = {"png", "jpg", "jpeg", "gif", "webp"}
 
 DIAS_SEMANA = ["lunes", "martes", "miercoles", "jueves", "viernes", "sabado", "domingo"]
 
-# ---------- HORARIOS PREDETERMINADOS DE LOS NEGOCIOS SEMBRADOS ----------
-# Formato por día (0=lunes ... 6=domingo): (abierto, apertura, cierre, intervalo_min)
 PLAN_HORARIO_JON = {
     0: (True, "09:00", "20:00", 30),
     1: (True, "09:00", "20:00", 30),
@@ -268,7 +266,6 @@ def config_dia(negocio_id, fecha_dia):
     return HorarioDia.query.filter_by(negocio_id=negocio_id, dia=fecha.weekday()).first()
 
 def asegurar_horario_semanal(negocio_id):
-    """Para negocios nuevos (registro de admin): lunes a viernes por defecto."""
     for d in range(7):
         existe = HorarioDia.query.filter_by(negocio_id=negocio_id, dia=d).first()
         if not existe:
@@ -283,7 +280,6 @@ def asegurar_horario_semanal(negocio_id):
     db.session.commit()
 
 def fijar_horario_semanal(negocio_id, plan):
-    """Borra el horario del negocio y aplica el plan dado (usado en /setup)."""
     HorarioDia.query.filter_by(negocio_id=negocio_id).delete()
     for d in range(7):
         abierto, apertura, cierre, intervalo = plan[d]
@@ -319,7 +315,7 @@ def asegurar_servicio(negocio_id, nombre, precio):
         db.session.add(Servicio(nombre=nombre, precio=precio, negocio_id=negocio_id))
 
 
-# ---------- ESTADO, SETUP Y RESET DEFINITIVO ----------
+# ---------- ESTADO, SETUP Y RESET DEFINITIVO (MySQL Y SQLite) ----------
 
 @app.route("/")
 def status():
@@ -356,7 +352,6 @@ def setup():
     n1 = Negocio.query.filter_by(nombre="Peluquería Jon").first()
     n2 = Negocio.query.filter_by(nombre="Barbería Central").first()
 
-    # Servicios por defecto de cada negocio (se reponen si faltan)
     if n1:
         asegurar_servicio(n1.id, "Corte de pelo", 15)
         asegurar_servicio(n1.id, "Arreglo de barba", 10)
@@ -364,7 +359,6 @@ def setup():
         asegurar_servicio(n2.id, "Corte clásico", 12)
         asegurar_servicio(n2.id, "Afeitado tradicional", 8)
 
-    # Horarios semanales PREDETERMINADOS de los negocios sembrados
     if n1:
         fijar_horario_semanal(n1.id, PLAN_HORARIO_JON)
     if n2:
@@ -383,23 +377,26 @@ def reset():
 
 @app.route("/reset-forzado")
 def reset_forzado():
-    try:
-        db.session.execute(db.text("SET FOREIGN_KEY_CHECKS = 0"))
-        tablas_a_borrar = [
-            "fotos", "horarios", "horarios_dia", "reservas", "servicios",
-            "negocios", "usuarios", "codigos_invitacion"
-        ]
-        for tabla in tablas_a_borrar:
-            db.session.execute(db.text(f"DROP TABLE IF EXISTS {tabla}"))
-        db.session.execute(db.text("SET FOREIGN_KEY_CHECKS = 1"))
-        db.session.commit()
-    except Exception:
-        db.session.rollback()
+    """
+    Borra las tablas en orden hijas -> madres. Funciona en MySQL Y en SQLite
+    (sin necesidad de SET FOREIGN_KEY_CHECKS, que SQLite no entiende).
+    """
+    tablas_en_orden = [
+        "fotos",
+        "horarios_dia",
+        "reservas",
+        "servicios",
+        "horarios",
+        "codigos_invitacion",
+        "negocios",
+        "usuarios",
+    ]
+    for tabla in tablas_en_orden:
         try:
-            db.session.execute(db.text("SET FOREIGN_KEY_CHECKS = 1"))
+            db.session.execute(db.text(f"DROP TABLE IF EXISTS {tabla}"))
             db.session.commit()
         except Exception:
-            pass
+            db.session.rollback()
 
     db.create_all()
     return jsonify({"status": "Base de datos reiniciada (forzado). Ahora visita /setup"})
