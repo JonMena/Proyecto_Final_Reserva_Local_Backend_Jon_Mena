@@ -655,7 +655,7 @@ def validar_fecha_de_reserva(fecha, negocio_id, excluir_id=None):
     if es_pasado(dia, hora):
         return "No se pueden hacer reservas en el pasado. Elige una fecha y hora futuras.", 400
 
-    # --- NUEVO: tope de 1 mes natural de antelación ---
+    # --- Tope de 1 mes natural de antelación ---
     try:
         dia_dt = datetime.strptime(dia, "%Y-%m-%d")
     except ValueError:
@@ -671,7 +671,6 @@ def validar_fecha_de_reserva(fecha, negocio_id, excluir_id=None):
 
     if dia_dt > limite:
         return "No se pueden reservar citas con mas de un mes de antelacion.", 400
-    # --- FIN NUEVO ---
 
     config = config_dia(negocio_id, dia)
     if not config or not config.abierto:
@@ -735,11 +734,17 @@ def editar_reserva(id):
         return jsonify({"error": "No puedes modificar reservas de otros usuarios"}), 403
 
     datos = request.get_json(silent=True) or {}
+
+    # El admin SOLO gestiona el estado, NUNCA la fecha
+    if usuario.rol == 'admin' and "fecha" in datos:
+        return jsonify({"error": "Los administradores no pueden modificar la fecha de una reserva. Solo confirmar o cancelar."}), 403
+
     if "fecha" in datos:
         error, codigo = validar_fecha_de_reserva(datos["fecha"], reserva.negocio_id, excluir_id=reserva.id)
         if error:
             return jsonify({"error": error}), codigo
         reserva.fecha = datos["fecha"]
+
     if "estado" in datos:
         if datos["estado"] not in ("pendiente", "confirmada", "cancelada"):
             return jsonify({"error": "Estado no valido. Usa: pendiente, confirmada o cancelada"}), 400
