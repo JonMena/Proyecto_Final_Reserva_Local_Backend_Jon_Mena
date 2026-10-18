@@ -1,6 +1,7 @@
 import os
 import certifi
 import secrets
+import calendar                      # --- NUEVO: para calcular el último día del mes ---
 from datetime import datetime
 from urllib.parse import quote_plus
 from dotenv import load_dotenv
@@ -653,6 +654,24 @@ def validar_fecha_de_reserva(fecha, negocio_id, excluir_id=None):
 
     if es_pasado(dia, hora):
         return "No se pueden hacer reservas en el pasado. Elige una fecha y hora futuras.", 400
+
+    # --- NUEVO: tope de 1 mes natural de antelación ---
+    try:
+        dia_dt = datetime.strptime(dia, "%Y-%m-%d")
+    except ValueError:
+        return "Formato de fecha invalido. Usa: YYYY-MM-DD HH:MM", 400
+
+    hoy = datetime.now()
+    mes_sig = hoy.month + 1
+    anio_sig = hoy.year + (1 if mes_sig > 12 else 0)
+    mes_sig_norm = mes_sig if mes_sig <= 12 else 1
+    ultimo_dia_mes_sig = calendar.monthrange(anio_sig, mes_sig_norm)[1]
+    dia_limite = min(hoy.day, ultimo_dia_mes_sig)
+    limite = datetime(anio_sig, mes_sig_norm, dia_limite, 23, 59, 59)
+
+    if dia_dt > limite:
+        return "No se pueden reservar citas con mas de un mes de antelacion.", 400
+    # --- FIN NUEVO ---
 
     config = config_dia(negocio_id, dia)
     if not config or not config.abierto:
