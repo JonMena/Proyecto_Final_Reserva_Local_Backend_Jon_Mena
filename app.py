@@ -1,7 +1,7 @@
 import os
 import certifi
 import secrets
-import calendar                      # --- NUEVO: para calcular el último día del mes ---
+import calendar                      # para saber cuántos días tiene el mes
 from datetime import datetime
 from urllib.parse import quote_plus
 from dotenv import load_dotenv
@@ -68,7 +68,7 @@ PLAN_HORARIO_CENTRAL = {
 }
 
 
-# ---------- MODELOS ----------
+# modelos de la base de datos
 
 class Usuario(db.Model):
     __tablename__ = "usuarios"
@@ -189,7 +189,7 @@ class CodigoInvitacion(db.Model):
         return {"id": self.id, "codigo": self.codigo, "usado": self.usado}
 
 
-# ---------- HELPERS DE SEGURIDAD ----------
+# seguridad: leer el token y proteger las rutas
 
 def obtener_usuario_actual():
     auth_header = request.headers.get('Authorization')
@@ -227,7 +227,7 @@ def admin_es_dueno(usuario, negocio_id):
     return Negocio.query.filter_by(id=negocio_id, usuario_id=usuario.id).first() is not None
 
 
-# ---------- HELPERS DE HORARIOS SEMANALES Y PASADO ----------
+# helpers de horarios y fechas
 
 def _hhmm_a_minutos(hhmm):
     partes = hhmm.split(":")
@@ -316,7 +316,7 @@ def asegurar_servicio(negocio_id, nombre, precio):
         db.session.add(Servicio(nombre=nombre, precio=precio, negocio_id=negocio_id))
 
 
-# ---------- ESTADO, SETUP Y RESET DEFINITIVO (MySQL Y SQLite) ----------
+# estado, setup y reset
 
 @app.route("/")
 def status():
@@ -378,10 +378,8 @@ def reset():
 
 @app.route("/reset-forzado")
 def reset_forzado():
-    """
-    Borra las tablas en orden hijas -> madres. Funciona en MySQL Y en SQLite
-    (sin necesidad de SET FOREIGN_KEY_CHECKS, que SQLite no entiende).
-    """
+    """Borra las tablas de hijas a madres para que funcione en MySQL y en SQLite
+    (SQLite no entiende SET FOREIGN_KEY_CHECKS)."""
     tablas_en_orden = [
         "fotos",
         "horarios_dia",
@@ -403,14 +401,14 @@ def reset_forzado():
     return jsonify({"status": "Base de datos reiniciada (forzado). Ahora visita /setup"})
 
 
-# ---------- ICONO SUBIDO (servir archivo) ----------
+# servir los iconos subidos
 
 @app.route("/uploads/<path:filename>")
 def servir_upload(filename):
     return send_from_directory(UPLOAD_FOLDER, filename)
 
 
-# ---------- NEGOCIOS ----------
+# negocios
 
 @app.route("/negocios", methods=["GET"])
 def listar_negocios():
@@ -427,7 +425,7 @@ def mis_negocios():
 @requiere_admin
 def editar_negocio(id):
     if not admin_es_dueno(request.usuario_actual, id):
-        return jsonify({"error": "No eres el dueno de este negocio"}), 403
+        return jsonify({"error": "No eres el dueño de este negocio"}), 403
     negocio = Negocio.query.get_or_404(id)
     datos = request.get_json(silent=True) or {}
     if "nombre" in datos and datos["nombre"].strip():
@@ -436,13 +434,13 @@ def editar_negocio(id):
     return jsonify(negocio.to_dict())
 
 
-# ---------- ICONO ÚNICO DEL NEGOCIO ----------
+# icono del negocio
 
 @app.route("/negocios/<int:id>/foto", methods=["POST"])
 @requiere_admin
 def subir_icono(id):
     if not admin_es_dueno(request.usuario_actual, id):
-        return jsonify({"error": "No eres el dueno de este negocio"}), 403
+        return jsonify({"error": "No eres el dueño de este negocio"}), 403
 
     archivo = request.files.get("foto")
     if not archivo or not archivo.filename:
@@ -454,6 +452,7 @@ def subir_icono(id):
 
     negocio = Negocio.query.get_or_404(id)
 
+    # si ya había icono, borro el archivo viejo antes de guardar el nuevo
     if negocio.icono_url:
         viejo = negocio.icono_url.split("/")[-1]
         ruta_vieja = os.path.join(UPLOAD_FOLDER, viejo)
@@ -472,7 +471,7 @@ def subir_icono(id):
 @requiere_admin
 def quitar_icono(id):
     if not admin_es_dueno(request.usuario_actual, id):
-        return jsonify({"error": "No eres el dueno de este negocio"}), 403
+        return jsonify({"error": "No eres el dueño de este negocio"}), 403
 
     negocio = Negocio.query.get_or_404(id)
     if negocio.icono_url:
@@ -486,13 +485,13 @@ def quitar_icono(id):
     return jsonify(negocio.to_dict())
 
 
-# ---------- HORARIOS SEMANALES ----------
+# horarios semanales
 
 @app.route("/horario", methods=["GET"])
 def ver_horario():
     negocio_id = request.args.get("negocio_id", type=int)
     if not negocio_id:
-        return jsonify({"error": "Falta el parametro negocio_id"}), 400
+        return jsonify({"error": "Falta el parámetro negocio_id"}), 400
     asegurar_horario_semanal(negocio_id)
     filas = HorarioDia.query.filter_by(negocio_id=negocio_id).order_by(HorarioDia.dia).all()
     return jsonify([f.to_dict() for f in filas])
@@ -511,10 +510,10 @@ def editar_horario():
             return jsonify({"error": "No tienes negocios"}), 404
         negocio_id = mios[0].id
     elif not admin_es_dueno(request.usuario_actual, negocio_id):
-        return jsonify({"error": "No eres el dueno de este negocio"}), 403
+        return jsonify({"error": "No eres el dueño de este negocio"}), 403
 
     if not dias or not isinstance(dias, list):
-        return jsonify({"error": "Falta la lista de dias"}), 400
+        return jsonify({"error": "Falta la lista de días"}), 400
 
     asegurar_horario_semanal(negocio_id)
 
@@ -549,7 +548,7 @@ def horarios_disponibles():
     fecha_dia = request.args.get("fecha", "")
     negocio_id = request.args.get("negocio_id", type=int)
     if not fecha_dia or not negocio_id:
-        return jsonify({"error": "Faltan los parametros fecha y negocio_id"}), 400
+        return jsonify({"error": "Faltan los parámetros fecha y negocio_id"}), 400
 
     if fecha_dia < hoy_str():
         return jsonify({"fecha": fecha_dia, "slots": [], "ocupados": [], "cerrado": False, "pasado": True})
@@ -562,6 +561,7 @@ def horarios_disponibles():
     ocupados = slots_ocupados(fecha_dia, negocio_id)
     libres = [s for s in todos if s not in ocupados]
 
+    # si es hoy, quito las horas que ya pasaron
     if fecha_dia == hoy_str():
         ahora = hora_actual_hhmm()
         libres = [s for s in libres if s > ahora]
@@ -569,13 +569,13 @@ def horarios_disponibles():
     return jsonify({"fecha": fecha_dia, "slots": libres, "ocupados": sorted(ocupados), "cerrado": False, "pasado": False})
 
 
-# ---------- SERVICIOS ----------
+# servicios
 
 @app.route("/servicios", methods=["GET"])
 def listar_servicios():
     negocio_id = request.args.get("negocio_id", type=int)
     if not negocio_id:
-        return jsonify({"error": "Falta el parametro negocio_id"}), 400
+        return jsonify({"error": "Falta el parámetro negocio_id"}), 400
     return jsonify([s.to_dict() for s in Servicio.query.filter_by(negocio_id=negocio_id).all()])
 
 @app.route("/servicios", methods=["POST"])
@@ -594,7 +594,7 @@ def crear_servicio():
             return jsonify({"error": "No tienes negocios"}), 404
         negocio_id = mios[0].id
     elif not admin_es_dueno(request.usuario_actual, negocio_id):
-        return jsonify({"error": "No eres el dueno de este negocio"}), 403
+        return jsonify({"error": "No eres el dueño de este negocio"}), 403
 
     servicio = Servicio(nombre=nombre, precio=precio, negocio_id=negocio_id)
     db.session.add(servicio)
@@ -606,7 +606,7 @@ def crear_servicio():
 def editar_servicio(id):
     servicio = Servicio.query.get_or_404(id)
     if not admin_es_dueno(request.usuario_actual, servicio.negocio_id):
-        return jsonify({"error": "No eres el dueno de este negocio"}), 403
+        return jsonify({"error": "No eres el dueño de este negocio"}), 403
     datos = request.get_json(silent=True) or {}
     if "nombre" in datos:
         servicio.nombre = datos["nombre"]
@@ -620,13 +620,13 @@ def editar_servicio(id):
 def borrar_servicio(id):
     servicio = Servicio.query.get_or_404(id)
     if not admin_es_dueno(request.usuario_actual, servicio.negocio_id):
-        return jsonify({"error": "No eres el dueno de este negocio"}), 403
+        return jsonify({"error": "No eres el dueño de este negocio"}), 403
     db.session.delete(servicio)
     db.session.commit()
     return jsonify({"status": "servicio eliminado", "id": id})
 
 
-# ---------- RESERVAS ----------
+# reservas
 
 @app.route("/reservas", methods=["GET"])
 @requiere_login
@@ -649,17 +649,17 @@ def listar_reservas():
 def validar_fecha_de_reserva(fecha, negocio_id, excluir_id=None):
     partes = fecha.split(" ")
     if len(partes) != 2:
-        return "Formato de fecha invalido. Usa: YYYY-MM-DD HH:MM", 400
+        return "Formato de fecha inválido. Usa: YYYY-MM-DD HH:MM", 400
     dia, hora = partes
 
     if es_pasado(dia, hora):
         return "No se pueden hacer reservas en el pasado. Elige una fecha y hora futuras.", 400
 
-    # --- Tope de 1 mes natural de antelación ---
+    # tope: como mucho un mes por delante
     try:
         dia_dt = datetime.strptime(dia, "%Y-%m-%d")
     except ValueError:
-        return "Formato de fecha invalido. Usa: YYYY-MM-DD HH:MM", 400
+        return "Formato de fecha inválido. Usa: YYYY-MM-DD HH:MM", 400
 
     hoy = datetime.now()
     mes_sig = hoy.month + 1
@@ -670,17 +670,17 @@ def validar_fecha_de_reserva(fecha, negocio_id, excluir_id=None):
     limite = datetime(anio_sig, mes_sig_norm, dia_limite, 23, 59, 59)
 
     if dia_dt > limite:
-        return "No se pueden reservar citas con mas de un mes de antelacion.", 400
+        return "No se pueden reservar citas con más de un mes de antelación.", 400
 
     config = config_dia(negocio_id, dia)
     if not config or not config.abierto:
-        return "El negocio esta cerrado ese dia. Elige otro dia.", 400
+        return "El negocio está cerrado ese día. Elige otro día.", 400
 
     if hora not in generar_slots(config):
-        return f"Hora fuera del horario del dia ({config.hora_apertura}-{config.hora_cierre}, cada {config.intervalo_minutos} min)", 400
+        return f"Hora fuera del horario del día ({config.hora_apertura}-{config.hora_cierre}, cada {config.intervalo_minutos} min)", 400
 
     if hora in slots_ocupados(dia, negocio_id, excluir_id=excluir_id):
-        return "Esa hora ya esta reservada. Elige otra.", 409
+        return "Esa hora ya está reservada. Elige otra.", 409
 
     return None, None
 
@@ -704,7 +704,7 @@ def crear_reserva():
     if servicio is None or servicio.negocio_id != negocio_id:
         return jsonify({"error": "El servicio no pertenece a este negocio"}), 404
 
-    # --- NUEVO: un cliente no puede tener dos reservas ACTIVAS del mismo servicio en el mismo negocio ---
+    # un cliente no puede tener dos reservas activas del mismo servicio aquí
     duplicada = (
         Reserva.query.filter_by(
             usuario_id=request.usuario_actual.id,
@@ -716,7 +716,7 @@ def crear_reserva():
     )
     if duplicada:
         return jsonify({
-            "error": "Ya tienes una reserva activa de este servicio en este negocio. Cancelala antes de pedir otra."
+            "error": "Ya tienes una reserva activa de este servicio en este negocio. Cancela la anterior antes de pedir otra."
         }), 409
 
     error, codigo = validar_fecha_de_reserva(fecha, negocio_id)
@@ -750,7 +750,7 @@ def editar_reserva(id):
 
     datos = request.get_json(silent=True) or {}
 
-    # El admin SOLO gestiona el estado, NUNCA la fecha
+    # el admin solo gestiona el estado, nunca mueve la fecha
     if usuario.rol == 'admin' and "fecha" in datos:
         return jsonify({"error": "Los administradores no pueden modificar la fecha de una reserva. Solo confirmar o cancelar."}), 403
 
@@ -762,7 +762,7 @@ def editar_reserva(id):
 
     if "estado" in datos:
         if datos["estado"] not in ("pendiente", "confirmada", "cancelada"):
-            return jsonify({"error": "Estado no valido. Usa: pendiente, confirmada o cancelada"}), 400
+            return jsonify({"error": "Estado no válido. Usa: pendiente, confirmada o cancelada"}), 400
         reserva.estado = datos["estado"]
 
     db.session.commit()
@@ -786,7 +786,7 @@ def borrar_reserva(id):
     return jsonify({"status": "reserva eliminada", "id": id})
 
 
-# ---------- AUTH: LOGIN / LOGOUT ----------
+# login y logout
 
 @app.route("/login", methods=["POST"])
 def login():
@@ -822,7 +822,7 @@ def logout():
     return jsonify({"mensaje": "Sesión cerrada"}), 200
 
 
-# ---------- REGISTRO Y CÓDIGOS DE INVITACIÓN ----------
+# registro y códigos de invitación
 
 @app.route("/registro", methods=["POST"])
 def registro():
@@ -835,13 +835,13 @@ def registro():
     nombre_negocio = datos.get("nombre_negocio", "").strip()
 
     if not email or "@" not in email:
-        return jsonify({"error": "Introduce un email valido"}), 400
+        return jsonify({"error": "Introduce un email válido"}), 400
     if len(password) < 6:
-        return jsonify({"error": "La contrasena debe tener al menos 6 caracteres"}), 400
+        return jsonify({"error": "La contraseña debe tener al menos 6 caracteres"}), 400
     if not nombre or not apellidos:
         return jsonify({"error": "El nombre y los apellidos son obligatorios"}), 400
     if Usuario.query.filter_by(email=email).first():
-        return jsonify({"error": "Ese email ya esta registrado"}), 409
+        return jsonify({"error": "Ese email ya está registrado"}), 409
 
     es_admin = False
     if codigo:
@@ -850,7 +850,7 @@ def registro():
         else:
             invitacion = CodigoInvitacion.query.filter_by(codigo=codigo, usado=False).first()
             if not invitacion:
-                return jsonify({"error": "Codigo de invitacion invalido o ya usado"}), 400
+                return jsonify({"error": "Código de invitación inválido o ya usado"}), 400
             invitacion.usado = True
             es_admin = True
 
