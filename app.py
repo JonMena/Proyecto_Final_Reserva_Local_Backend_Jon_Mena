@@ -704,6 +704,21 @@ def crear_reserva():
     if servicio is None or servicio.negocio_id != negocio_id:
         return jsonify({"error": "El servicio no pertenece a este negocio"}), 404
 
+    # --- NUEVO: un cliente no puede tener dos reservas ACTIVAS del mismo servicio en el mismo negocio ---
+    duplicada = (
+        Reserva.query.filter_by(
+            usuario_id=request.usuario_actual.id,
+            servicio_id=servicio_id,
+            negocio_id=negocio_id,
+        )
+        .filter(Reserva.estado.in_(["pendiente", "confirmada"]))
+        .first()
+    )
+    if duplicada:
+        return jsonify({
+            "error": "Ya tienes una reserva activa de este servicio en este negocio. Cancelala antes de pedir otra."
+        }), 409
+
     error, codigo = validar_fecha_de_reserva(fecha, negocio_id)
     if error:
         return jsonify({"error": error}), codigo
