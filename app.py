@@ -822,7 +822,7 @@ def logout():
     return jsonify({"mensaje": "Sesión cerrada"}), 200
 
 
-# registro y códigos de invitación
+# registro
 
 @app.route("/registro", methods=["POST"])
 def registro():
@@ -881,21 +881,6 @@ def registro():
         "usuario": usuario.to_dict(),
         "negocio": negocio.to_dict() if negocio else None,
     }), 201
-
-
-@app.route("/codigos", methods=["POST"])
-@requiere_admin
-def crear_codigo():
-    codigo = CodigoInvitacion(codigo=secrets.token_hex(6).upper())
-    db.session.add(codigo)
-    db.session.commit()
-    return jsonify(codigo.to_dict()), 201
-
-
-@app.route("/codigos", methods=["GET"])
-@requiere_admin
-def listar_codigos():
-    return jsonify([c.to_dict() for c in CodigoInvitacion.query.all()])
 
 
 if __name__ == "__main__":
