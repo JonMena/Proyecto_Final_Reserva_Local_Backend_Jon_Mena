@@ -86,4 +86,9 @@ O usa SQLite local definiendo `DATABASE_URL=sqlite:///reservalocal.db`.
 Alojado en PythonAnywhere con configuración WSGI manual. En producción se usa
 SQLite porque el plan gratuito bloquea los puertos MySQL salientes; en
 desarrollo se usa un clúster de TiDB Cloud compatible con MySQL. El mismo
-esquema y el mismo código funcionan en ambos entornos.
+esquema y el mismo código funcionan en ambos entornos.<br><br><br>
+
+
+## DIAGRAMA
+
+![alt text](DiagramaDatosRL.jpg)
