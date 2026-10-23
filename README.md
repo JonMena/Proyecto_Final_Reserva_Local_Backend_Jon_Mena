@@ -5,13 +5,6 @@ negocio local (peluquerías, barberías, clínicas...). Cada negocio define sus
 propios servicios y su horario semanal, y los clientes reservan cita online.
 La instancia desplegada incluye una peluquería como ejemplo.
 
-## Tecnologías
-
-- Python 3.10 + Flask + Flask-Cors
-- Flask-SQLAlchemy (ORM)
-- PyMySQL (driver compatible con MySQL)
-- SQLite en producción y TiDB Cloud (compatible con MySQL) en desarrollo
-- python-dotenv y certifi
 
 ## Cuentas de prueba
 
@@ -92,3 +85,48 @@ esquema y el mismo código funcionan en ambos entornos.<br><br><br>
 ## DIAGRAMA
 
 ![alt text](DiagramaDatosRL.jpg)
+
+## PARTE TÉCNICA
+
+### Lenguajes y librerías
+
+| Elemento | Para qué se usa |
+|---|---|
+| Python 3.10 | Lenguaje en el que está escrito todo el backend |
+| Flask | Framework web que sirve la API y gestiona las rutas |
+| Flask-Cors | Permite que el frontend, alojado en otro dominio, llame a la API |
+| Flask-SQLAlchemy | ORM: maneja la base de datos mediante clases de Python |
+| PyMySQL | Driver para conectar con MySQL / TiDB Cloud |
+| python-dotenv | Lee las credenciales del archivo `.env` sin subirlas a Git |
+| certifi | Certificados SSL para la conexión segura a la base de datos |
+| Werkzeug | Cifra y comprueba las contraseñas (nunca se guardan en claro) |
+
+### Base de datos
+
+- En **producción** (PythonAnywhere) se usa **SQLite**, porque el plan gratuito
+  bloquea los puertos MySQL salientes.
+- En **desarrollo** se usa **TiDB Cloud**, compatible con MySQL.
+- Gracias a SQLAlchemy, el mismo código y el mismo esquema funcionan en ambos
+  entornos sin cambios.
+
+### Distribución de los archivos
+
+```
+Reserva_Local_Backend/
+├── app.py             Todo el backend en un solo archivo, organizado por bloques
+├── requirements.txt   Dependencias de Python
+├── .env               Credenciales de la base de datos
+├── uploads/           Iconos que suben los negocios
+└── README.md          Documentación
+```
+
+### Cómo se organiza el código dentro de `app.py`
+
+Aunque todo vive en un único archivo, está separado en bloques claros, de
+arriba abajo:
+
+1. **Configuración**: lectura del `.env`, conexión a la base de datos y constantes.
+2. **Modelos**: las seis tablas como clases de SQLAlchemy.
+3. **Seguridad**: lectura del token y los decoradores `requiere_login` y `requiere_admin`.
+4. **Helpers**: funciones de fechas y horarios (generar slots, detectar pasado, tope de un mes).
+5. **Rutas**: los endpoints de la API, agrupados por recurso (negocios, horarios, servicios, reservas, auth).
